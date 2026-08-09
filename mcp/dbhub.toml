@@ -1,0 +1,9 @@
+[[sources]]
+id = "default"
+description = "Project database (read-only)"
+dsn = "${DSN}"
+
+[[tools]]
+name = "execute_sql"
+source = "default"
+readonly = true

@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "url": "http://mcp-db:8080/mcp"
+    }
+  }
+}

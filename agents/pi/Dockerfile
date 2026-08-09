@@ -14,6 +14,8 @@ RUN git config --global --add safe.directory /workspace
 
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
 
+RUN pi install npm:@spences10/pi-mcp
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

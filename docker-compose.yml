@@ -2,6 +2,25 @@ include:
   - model/llama-cpp.yml
 
 services:
+  mcp-db:
+    image: bytebase/dbhub:latest
+    container_name: mcp-db
+    restart: unless-stopped
+    init: true
+    networks:
+      - harness-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./mcp/dbhub.toml:/app/dbhub.toml:ro
+    environment:
+      - DSN=postgres://${DB_AGENT_USER}:${DB_AGENT_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
+    command: >
+      --transport http
+      --port 8080
+      --config /app/dbhub.toml
+      --allowed-hosts mcp-db,localhost,127.0.0.1
+
   pi-agent:
     build:
       context: ./agents/pi
@@ -14,8 +33,9 @@ services:
       - "${PROJECT_PATH:?Укажи PROJECT_PATH перед запуском: export PROJECT_PATH=/путь/до/проекта}:/workspace"
       - pi-agent-home:/root/.pi/agent
       - ./agents/pi/models.json:/root/.pi/agent/models.json:ro
+      - ./agents/pi/mcp.json:/root/.pi/agent/mcp.json:ro
       - ./shared/conventions/common.md:/workspace/AGENTS.md:ro
-      - maven-cache:/root/.m2
+      - maven-cache:/root/.m
     env_file:
       - .env
     extra_hosts:
@@ -24,6 +44,8 @@ services:
     tmpfs:
       - /tmp
     restart: "no"
+    depends_on:
+      - mcp-db
 
 networks:
   harness-net:
