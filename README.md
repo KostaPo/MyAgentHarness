@@ -5,7 +5,7 @@ Claude Code) поверх любого локального проекта. Ло
 + фолбэк на OpenRouter с полным динамическим каталогом моделей.
 
 ## Структура
-
+```text
 MyAgentHarness/
 ├── README.md
 ├── .env
@@ -23,6 +23,7 @@ MyAgentHarness/
 └── shared/
     └── conventions/
         └── common.md
+```    
 
 - model/llama-cpp.yml   — сервис локальной модели (GPU, OpenAI-совместимый API)
 - agents/pi/             — Dockerfile + entrypoint.sh + models.json для pi-агента
