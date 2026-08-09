@@ -1,0 +1,32 @@
+services:
+  llama-cpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda13-b10223
+    container_name: llama-cpp
+    restart: unless-stopped
+    ports:
+      - "1234:8080"
+    volumes:
+      - ~/.lmstudio/models:/models
+    networks:
+      - harness-net
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    command: >
+      --model /models/lmstudio-community/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-Q6_K.gguf
+      --no-mmproj
+      --host 0.0.0.0
+      -c 262144
+      --gpu-layers 99
+      --n-cpu-moe 32
+      --threads 12
+      --threads-batch 12
+      --flash-attn on
+      --parallel 1
+      --batch-size 2048
+      --ubatch-size 2048
+      --cache-type-k f16
+      --cache-type-v f16
+      --jinja
+      --metrics
+      --reasoning off

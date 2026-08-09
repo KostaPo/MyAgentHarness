@@ -1,0 +1,34 @@
+include:
+  - model/llama-cpp.yml
+
+services:
+  pi-agent:
+    build:
+      context: ./agents/pi
+    container_name: pi-agent
+    stdin_open: true
+    tty: true
+    networks:
+      - harness-net
+    volumes:
+      - "${PROJECT_PATH:?Укажи PROJECT_PATH перед запуском: export PROJECT_PATH=/путь/до/проекта}:/workspace"
+      - pi-agent-home:/root/.pi/agent
+      - ./agents/pi/models.json:/root/.pi/agent/models.json:ro
+      - ./shared/conventions/common.md:/workspace/AGENTS.md:ro
+      - maven-cache:/root/.m2
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: "no"
+
+networks:
+  harness-net:
+    name: harness-net
+
+volumes:
+  pi-agent-home:
+  maven-cache:
