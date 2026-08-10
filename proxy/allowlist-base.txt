@@ -1,0 +1,58 @@
+# --- LLM провайдер ---
+.openrouter.ai
+
+# --- Языки и рантаймы ---
+.docs.oracle.com
+.dev.java
+.kotlinlang.org
+.docs.python.org
+.doc.rust-lang.org
+.pkg.go.dev
+.nodejs.org
+
+# --- Java/Spring экосистема ---
+.spring.io
+.docs.spring.io
+.hibernate.org
+.kafka.apache.org
+.junit.org
+.mockito.org
+.projectlombok.org
+.quarkus.io
+.micronaut.io
+.baeldung.com
+
+# --- Данные / очереди / инфра ---
+.rabbitmq.com
+.redis.io
+.elastic.co
+.testcontainers.org
+
+# --- Инфраструктура / DevOps ---
+.kubernetes.io
+.docs.docker.com
+.developer.hashicorp.com
+
+# --- Пакетные реестры ---
+.readthedocs.io
+.javadoc.io
+.pypi.org
+.npmjs.com
+.crates.io
+.maven.apache.org
+.mvnrepository.com
+
+# --- Общее ---
+.developer.mozilla.org
+.github.io
+raw.githubusercontent.com
+stackoverflow.com
+
+# --- Пакетные реестры (добавлено) ---
+registry.npmjs.org
+
+# --- Git / VCS API ---
+api.github.com
+
+# --- pi agent runtime ---
+pi.dev

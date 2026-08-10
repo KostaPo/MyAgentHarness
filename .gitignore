@@ -31,3 +31,4 @@ build/
 
 .env
 *.log
+proxy/logs/*.log

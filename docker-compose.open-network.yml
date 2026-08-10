@@ -1,0 +1,8 @@
+services:
+  pi-agent:
+    networks:
+      - harness-net
+      - egress-net
+    environment:
+      - HTTP_PROXY=
+      - HTTPS_PROXY=

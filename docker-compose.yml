@@ -2,6 +2,18 @@ include:
   - model/llama-cpp.yml
 
 services:
+  egress-proxy:
+    image: ubuntu/squid:latest
+    container_name: egress-proxy
+    restart: unless-stopped
+    networks:
+      - harness-net
+      - egress-net
+    volumes:
+      - ./proxy/squid.conf:/etc/squid/squid.conf:ro
+      - ./proxy/allowlist-base.txt:/etc/squid/allowlist-base.txt:ro
+      - squid-logs:/var/log/squid
+
   mcp-db:
     image: bytebase/dbhub:latest
     container_name: mcp-db
@@ -9,6 +21,7 @@ services:
     init: true
     networks:
       - harness-net
+      - egress-net          # <-- добавлено, нужно для host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -38,6 +51,10 @@ services:
       - maven-cache:/root/.m
     env_file:
       - .env
+    environment:
+      - HTTP_PROXY=http://egress-proxy:3128
+      - HTTPS_PROXY=http://egress-proxy:3128
+      - NO_PROXY=mcp-db,llama-cpp,localhost,127.0.0.1
     extra_hosts:
       - "host.docker.internal:host-gateway"
     read_only: true
@@ -46,11 +63,16 @@ services:
     restart: "no"
     depends_on:
       - mcp-db
+      - egress-proxy
 
 networks:
   harness-net:
     name: harness-net
+    internal: true
+  egress-net:
+    name: egress-net
 
 volumes:
   pi-agent-home:
   maven-cache:
+  squid-logs:

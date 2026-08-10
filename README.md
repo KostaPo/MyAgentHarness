@@ -241,6 +241,38 @@ agents/pi/mcp.json:
 нужно явно выполнить /mcp connect postgres. Инструмент появляется
 в pi как mcp__postgres__execute_sql.
 
+## Сетевая изоляция (egress-proxy)
+
+pi-agent не имеет прямого доступа в интернет: сеть harness-net
+объявлена как internal (нет default route наружу). Единственный
+выход — через egress-proxy (squid) с allowlist доменов.
+
+Allowlist состоит из двух файлов:
+- proxy/allowlist-base.txt — стабильный костяк (языки, инфра,
+  пакетные реестры), меняется редко
+- proxy/allowlist-project.txt — домены под текущий активный проект
+
+### Расширение allowlist
+
+1. Агент сталкивается с блокировкой домена и сообщает о ней в чате
+   (см. правило в shared/conventions/common.md), либо посмотреть
+   список отказов после сессии:
+
+       ./proxy/scripts/denied.sh
+
+2. Добавить нужный домен в proxy/allowlist-project.txt с
+   комментарием (дата, причина)
+3. Применить без пересборки контейнеров:
+
+       docker compose exec egress-proxy squid -k reconfigure
+
+4. Если домен нужен систематически (не только в этом проекте) —
+   перенести из allowlist-project.txt в allowlist-base.txt
+
+ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ: allowlist-project.txt привязан к текущему
+активному проекту, как и DB_* переменные. При переключении
+PROJECT_PATH — просмотреть и почистить список вручную.
+
 ## КРИТИЧЕСКИ ВАЖНО: pi-agent-home volume перекрывает пакеты образа
 
 pi install кладёт пакеты в /root/.pi/agent — тот же путь, что смонтирован
