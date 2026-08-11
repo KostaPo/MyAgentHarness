@@ -2,20 +2,26 @@
 
 Изолированная инфраструктура для запуска AI coding-агентов (pi, далее —
 Claude Code) поверх любого локального проекта. Локальная LLM (llama.cpp)
-+ фолбэк на OpenRouter, общий MCP-сервер для доступа к БД.
++ фолбэк на OpenRouter, общий MCP-сервер для доступа к БД, контролируемый
+  сетевой доступ через egress-proxy.
 
 ## Структура
 ```text
 MyAgentHarness/
 ├── README.md
+├── Makefile
 ├── .env
 ├── .env.example
 ├── .gitignore
 ├── docker-compose.yml
+├── docker-compose.open-network.yml
 ├── model/
 │   └── llama-cpp.yml
 ├── mcp/
 │   └── dbhub.toml
+├── proxy/
+│   ├── squid.conf
+│   └── allowlist-base.txt
 ├── agents/
 │   ├── pi/
 │   │ ├── Dockerfile
@@ -26,10 +32,11 @@ MyAgentHarness/
 └── shared/
     └── conventions/
         └── common.md
-```    
+```
 
 - model/llama-cpp.yml   — сервис локальной модели (GPU, OpenAI-совместимый API)
 - mcp/                   — общая MCP-инфраструктура (сейчас: DBHub для БД)
+- proxy/                 — egress-proxy (squid) и allowlist разрешённых доменов
 - agents/pi/             — Dockerfile + entrypoint.sh + models.json + mcp.json для pi
 - agents/claude-code/    — заготовка под второго агента (аналогичный паттерн)
 - shared/conventions/    — общие правила поведения, монтируются как AGENTS.md/CLAUDE.md
@@ -47,12 +54,10 @@ MyAgentHarness/
                 ┌─────────────────┐             ┌─────────────────┐
                 │    llama-cpp    │             │   OpenRouter    │
                 │   Local / GPU   │             │   Cloud / API   │
-                │     :1234       │             │  100s of models │
                 └────────┬────────┘             └────────┬────────┘
                          │                               │
                          └───────────────┬───────────────┘
                                          │
-                                         │ LLM
                                          ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │                         AGENT HARNESS                                │
@@ -61,37 +66,31 @@ MyAgentHarness/
 │                     │     pi-agent       │                           │
 │                     │                    │                           │
 │                     │   Agent runtime    │                           │
-│                     │                    │                           │
 │                     │  read_only: true   │                           │
 │                     │  ephemeral (--rm)  │                           │
 │                     │  no SSH keys       │                           │
+│                     │  no direct network │                           │
 │                     └─────────┬──────────┘                           │
 │                               │                                      │
-│                    ┌──────────┴──────────┐                           │
-│                    │                     │                           │
-│                    ▼                     ▼                           │
-│          ┌──────────────────┐   ┌──────────────────┐                 │
-│          │    CODE TOOLS    │   │      MCP-DB      │                 │
-│          │                  │   │      DBHub       │                 │
-│          │  filesystem      │   │    read-only     │                 │
-│          │  git             │   │                  │                 │
-│          │  shell           │   └────────┬─────────┘                 │
-│          │  tests           │            │                           │
-│          └────────┬─────────┘            │                           │
-│                   │                      │                           │
-└───────────────────┼──────────────────────┼───────────────────────────┘
-                    │                      │
-                    ▼                      ▼
-       ╔══════════════════════╗   ╔══════════════════════╗
-       ║  PROJECT CODEBASE    ║   ║     PROJECT DB       ║
-       ║                      ║   ║                      ║
-       ║                      ║   ║     PostgreSQL       ║
-       ║  /home/kostapo/...   ║   ║       :5432          ║
-       ║                      ║   ║                      ║
-       ║  mounted as          ║   ║     read-only        ║
-       ║  /workspace          ║   ║       access         ║
-       ╚══════════════════════╝   ╚══════════════════════╝
+│                    ┌──────────┼──────────────┐                       │
+│                    │          │              │                       │
+│                    ▼          ▼              ▼                       │
+│          ┌──────────────┐ ┌─────────┐ ┌──────────────┐               │
+│          │  CODE TOOLS  │ │ MCP-DB  │ │ egress-proxy │               │
+│          │  filesystem  │ │ DBHub   │ │   (squid)    │               │
+│          │  git, shell  │ │readonly │ │   allowlist  │               │
+│          └──────┬───────┘ └────┬────┘ └──────┬───────┘               │
+│                  │              │             │                       │
+└──────────────────┼──────────────┼─────────────┼───────────────────────┘
+                   │              │             │
+                   ▼              ▼             ▼
+      ╔══════════════════════╗ ╔═════════════╗ ╔══════════════════╗
+      ║  PROJECT CODEBASE    ║ ║ PROJECT DB  ║ ║  РАЗРЕШЁННЫЕ     ║
+      ║  mounted as          ║ ║ PostgreSQL  ║ ║  ДОМЕНЫ          ║
+      ║  /workspace          ║ ║ read-only   ║ ║  (allowlist)     ║
+      ╚══════════════════════╝ ╚═════════════╝ ╚══════════════════╝
 ```
+
 ### Ключевые изоляционные границы
 
 - **Доступ агента к файловой системе ограничен проектом:** единственный volume mount в `pi-agent` — `${PROJECT_PATH}` → `/workspace`; остальная файловая система хоста агенту не видна.
@@ -99,6 +98,7 @@ MyAgentHarness/
 - **Git credentials не предоставляются:** SSH-ключи, credential helpers и другие учётные данные хоста не монтируются в контейнер. Доступ к приватным Git remotes из агента невозможен без явно предоставленных credentials.
 - **Доступ к БД ограничен на двух уровнях:** PostgreSQL использует отдельную `readonly`-роль, а `mcp-db` дополнительно работает в режиме `readonly`, заданном в MCP-конфигурации.
 - **`mcp-db` — единая точка доступа к PostgreSQL:** все агенты harness получают доступ к БД через один контролируемый MCP-слой, что позволяет централизованно применять политики доступа и ограничения.
+- **Сетевой доступ pi-agent ограничен по умолчанию:** сеть `harness-net` объявлена как `internal` (нет маршрута в интернет). Единственный выход — через `egress-proxy` с allowlist доменов. См. раздел "Сетевой доступ" ниже.
 
 > **Важно:** `read_only: true` у Docker-контейнера ограничивает файловую систему самого контейнера и **не означает read-only доступ к PostgreSQL**.
 >
@@ -120,7 +120,7 @@ MyAgentHarness/
 ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ: DB_* переменные привязаны к ОДНОМУ активному проекту.
 При переключении на другой проект с БД — обновить DB_* в .env вручную.
 
-## Быстрый старт
+## Быстрый старт (через Makefile)
 
 Первый раз (один раз при клонировании):
 
@@ -130,20 +130,29 @@ MyAgentHarness/
 Каждый рабочий запуск:
 
     export PROJECT_PATH=/абсолютный/путь/до/проекта
-    docker compose up -d llama-cpp mcp-db
-    docker compose run --rm pi-agent
+    make run
 
 Внутри сессии pi (если нужна БД):
 
     /mcp connect postgres
 
+Другие команды:
+
+    make run        # запуск в защищённом режиме (allowlist активен) — дефолт
+    make run-open    # запуск с полным доступом в интернет (без allowlist)
+    make up          # поднять инфраструктуру (модель, БД-мост, прокси) без агента
+    make down        # остановить всё
+    make clean       # остановить всё + удалить volumes (чистый старт)
+    make ps          # статус контейнеров
+    make logs        # логи llama-cpp, mcp-db, egress-proxy
+    make denied      # список доменов, заблокированных squid (для расширения allowlist)
+
+Никаких `chmod` или дополнительной настройки после `git clone` не требуется —
+всё работает через `make` сразу после `cp .env.example .env`.
+
 Проверка, что модель отвечает (по желанию):
 
     curl http://localhost:1234/v1/models
-
-Остановить всё:
-
-    docker compose down
 
 ## Требование к проекту — readonly-юзер должен существовать в БД заранее
 
@@ -203,6 +212,11 @@ DSN собирается в docker-compose.yml из DB_AGENT_* и передаё
 переменная окружения контейнера mcp-db, где ${DSN} интерполируется
 самим DBHub при чтении toml.
 
+`mcp-db` подключён к обеим сетям (`harness-net` и `egress-net`) —
+это необходимо для доступа к `host.docker.internal` (проектная БД
+на хосте), так как `harness-net` изолирована (`internal: true`) и
+сама по себе не даёт маршрута наружу.
+
 ВАЖНЫЕ НЮАНСЫ, НАЙДЕННЫЕ НА ПРАКТИКЕ:
 - readonly задаётся на уровне [[tools]], НЕ на уровне [[sources]] —
   DBHub явно отклоняет source-level readonly с ошибкой
@@ -241,16 +255,55 @@ agents/pi/mcp.json:
 нужно явно выполнить /mcp connect postgres. Инструмент появляется
 в pi как mcp__postgres__execute_sql.
 
-## Сетевая изоляция (egress-proxy)
+## Сетевой доступ: ограниченный (по умолчанию) или полный
 
-pi-agent не имеет прямого доступа в интернет: сеть harness-net
-объявлена как internal (нет default route наружу). Единственный
-выход — через egress-proxy (squid) с allowlist доменов.
+У pi-agent есть два режима сетевого доступа:
 
-Allowlist состоит из двух файлов:
-- proxy/allowlist-base.txt — стабильный костяк (языки, инфра,
-  пакетные реестры), меняется редко
-- proxy/allowlist-project.txt — домены под текущий активный проект
+### Защищённый режим (`make run`) — по умолчанию
+
+Сеть `harness-net`, в которой работает pi-agent, объявлена как
+`internal: true` — у неё физически нет маршрута в интернет. Единственный
+выход — через контейнер `egress-proxy` (squid), который пропускает
+только домены из allowlist. Это гарантия сетевого уровня: даже если
+агент (или промпт-инъекция) попробует обратиться в обход прокси
+(curl напрямую, другой протокол, смена DNS) — соединение физически не
+установится, потому что у сети нет default route наружу.
+
+    make run
+
+### Открытый режим (`make run-open`) — полный доступ
+
+Для разовых задач с непредсказуемым набором внешних источников можно
+запустить агента с полным, неограниченным доступом в интернет. В этом
+режиме pi-agent дополнительно подключается к сети `egress-net`
+(не-internal), и прокси-переменные сбрасываются — трафик идёт напрямую,
+в обход squid и allowlist.
+
+    make run-open
+
+**ВНИМАНИЕ:** в открытом режиме allowlist и защита от exfiltration
+через сеть отключены полностью. Использовать осознанно, понимая риски.
+Секреты (OPENROUTER_API_KEY, DB-креды) в этом режиме так же доступны
+агенту через env, как и обычно — сетевое ограничение было единственным
+барьером против их утечки через произвольный внешний запрос.
+
+### Как это устроено технически
+
+- `docker-compose.yml` — базовая конфигурация, сеть `harness-net`
+  всегда `internal: true`.
+- `docker-compose.open-network.yml` — override-файл, который НЕ трогает
+  саму сеть `harness-net` (это вызвало бы конфликт пересоздания сети,
+  если инфраструктура уже поднята), а лишь подключает `pi-agent`
+  дополнительно к `egress-net` и сбрасывает `HTTP_PROXY`/`HTTPS_PROXY`.
+- `make run` и `make run-open` — обёртки над соответствующими
+  `docker compose run` командами, чтобы не запоминать флаги `-f`.
+
+### Allowlist доменов
+
+Список разрешённых доменов — `proxy/allowlist-base.txt`. Один общий
+файл (без разделения на "базовый/проектный") — оправдано тем, что
+харнес переиспользуется между проектами схожего стека, и большинство
+добавленных доменов пригождаются повторно.
 
 ### Расширение allowlist
 
@@ -258,20 +311,13 @@ Allowlist состоит из двух файлов:
    (см. правило в shared/conventions/common.md), либо посмотреть
    список отказов после сессии:
 
-       ./proxy/scripts/denied.sh
+       make denied
 
-2. Добавить нужный домен в proxy/allowlist-project.txt с
-   комментарием (дата, причина)
+2. Добавить нужный домен в proxy/allowlist-base.txt с комментарием
+   (дата, причина)
 3. Применить без пересборки контейнеров:
 
        docker compose exec egress-proxy squid -k reconfigure
-
-4. Если домен нужен систематически (не только в этом проекте) —
-   перенести из allowlist-project.txt в allowlist-base.txt
-
-ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ: allowlist-project.txt привязан к текущему
-активному проекту, как и DB_* переменные. При переключении
-PROJECT_PATH — просмотреть и почистить список вручную.
 
 ## КРИТИЧЕСКИ ВАЖНО: pi-agent-home volume перекрывает пакеты образа
 
@@ -285,8 +331,7 @@ pi install кладёт пакеты в /root/.pi/agent — тот же путь
 После ЛЮБОГО изменения Dockerfile, затрагивающего pi install, —
 обязательно:
 
-    docker compose down
-    docker volume rm myagentharness_pi-agent-home
+    make clean
     docker compose build pi-agent
 
 То же самое правило касается сброса залипшей дефолтной модели.
@@ -300,6 +345,9 @@ pi install кладёт пакеты в /root/.pi/agent — тот же путь
 - Контейнер эфемерен (--rm): при выходе удаляется целиком
 - БД доступна строго read-only — на уровне СУБД (readonly-роль) И
   дополнительно на уровне MCP-сервера (readonly tool), двойная защита
+- Сетевой доступ ограничен allowlist на уровне сети (internal-сеть +
+  egress-proxy), а не только на уровне отдельного инструмента —
+  действует по умолчанию, отключается явно через make run-open
 
 Мягкая граница (уровень промпта, не гарантирована техническими средствами):
 - shared/conventions/common.md — поведенческие правила, соблюдение
@@ -350,7 +398,9 @@ local-llama: модель указывается ЯВНО — единствен
 
 openrouter: models НЕ указываются — провайдер регистрируется только
 через baseUrl + apiKey, список моделей pi получает динамически из
-живого API OpenRouter (сотни моделей).
+живого API OpenRouter (сотни моделей). В защищённом режиме этот
+доступ проходит через egress-proxy — домен openrouter.ai уже включён
+в allowlist по умолчанию.
 
 ВАЖНО ПРО ДЕФОЛТНУЮ МОДЕЛЬ: pi сохраняет последний выбор в volume
 pi-agent-home между запусками, порядок в models.json НЕ определяет
@@ -376,6 +426,14 @@ shell-команда — ошибка вида "Cannot convert argument to a Byt
     docker compose run --rm --entrypoint bash pi-agent -c \
       "PGPASSWORD=\$DB_AGENT_PASSWORD psql -h host.docker.internal -p \$DB_PORT -U \$DB_AGENT_USER -d \$DB_NAME -c 'SELECT current_user;'"
 
+Диагностика сетевого доступа (защищённый режим — должен пройти для
+доменов из allowlist и блокироваться для остальных):
+
+    docker compose run --rm --entrypoint bash pi-agent -c \
+      "curl -sv --max-time 10 https://openrouter.ai 2>&1 | tail -20"
+    docker compose run --rm --entrypoint bash pi-agent -c \
+      "curl -sv --max-time 10 https://example.com 2>&1 | tail -20"
+
 ## Частые ошибки и их причины
 
 **"required variable PROJECT_PATH is missing a value"**
@@ -400,8 +458,27 @@ readonly в toml-конфиге DBHub должен быть в [[tools]], не �
 **MCP-сервер БД: "Host 'mcp-db' is not allowed" (403)**
 Нужен явный флаг --allowed-hosts mcp-db,localhost,127.0.0.1.
 
+**mcp-db: "ENETUNREACH" / "ECONNREFUSED" при подключении к БД**
+ENETUNREACH — mcp-db не подключён к egress-net, у harness-net (internal)
+нет маршрута до host.docker.internal. ECONNREFUSED — сетевой маршрут
+есть, но Postgres на хосте не слушает нужный адрес/порт (проверить
+`ss -tlnp | grep 5432` и публикацию порта в проектном compose).
+
+**egress-proxy: "FATAL: Cannot open access.log... Permission denied"**
+Bind-mount с хоста для логов squid не подходит — владелец директории
+на хосте не совпадает с пользователем `proxy` внутри контейнера.
+Использовать named volume (squid-logs), не bind-mount.
+
+**make run-open: "network harness-net has active endpoints"**
+Override-файл не должен переопределять саму сеть harness-net (снимать
+internal: true) — это требует пересоздания сети, что конфликтует с уже
+запущенными контейнерами. Правильно — только добавить pi-agent в
+дополнительную сеть egress-net, оставив определение harness-net
+неизменным.
+
 **Свежеустановленный pi-пакет не виден в контейнере**
-См. раздел "КРИТИЧЕСКИ ВАЖНО" выше — снести pi-agent-home volume.
+См. раздел "КРИТИЧЕСКИ ВАЖНО" выше — снести pi-agent-home volume
+(make clean).
 
 **Агент использует credentials приложения вместо DB_AGENT_***
 Исправлено правилом в shared/conventions/common.md.
@@ -409,14 +486,21 @@ readonly в toml-конфиге DBHub должен быть в [[tools]], не �
 ## Текущий статус (для восстановления контекста в новой сессии)
 
 Полностью реализовано и проверено практически:
-- Инфраструктура: harness-net, llama-cpp, pi-agent (multi-stage Java 21),
-  файловая изоляция, git локально работает и не коммитит AGENTS.md,
-  push технически невозможен
+- Инфраструктура: harness-net (internal), egress-net, llama-cpp,
+  pi-agent (multi-stage Java 21), файловая изоляция, git локально
+  работает и не коммитит AGENTS.md, push технически невозможен
 - БД: readonly-роль llm_agent (создаётся на стороне проекта), доступ
-  через host.docker.internal, подтверждены и чтение, и блокировка записи
+  через host.docker.internal (mcp-db подключён к egress-net для
+  этого), подтверждены и чтение, и блокировка записи
 - MCP: единый сервер mcp-db (DBHub) для доступа к БД, readonly на
   уровне tool-конфига, pi подключается через сторонний пакет
   @spences10/pi-mcp, инструмент mcp__postgres__execute_sql работает
+- Сеть: egress-proxy (squid) с allowlist, защищённый режим (make run)
+  и открытый режим (make run-open) оба проверены практически —
+  allowlist пропускает разрешённые домены, блокирует остальные (403),
+  internal-сеть держит границу даже без прокси-переменных
+- Makefile: единая точка входа для всех операций (run, run-open, up,
+  down, clean, ps, logs, denied), без ручного chmod после git clone
 - Секреты (.env) реально доходят до всех сервисов (agent, mcp-db)
 - Оба провайдера модели (local-llama, openrouter) работают и переключаемы
 - Правило про DB_AGENT_* и MCP как основной способ доступа зафиксировано
@@ -447,3 +531,18 @@ readonly в toml-конфиге DBHub должен быть в [[tools]], не �
 - Правило про DB_AGENT_* и приоритет MCP вынесено в общие конвенции,
   а не патч под pi: обнаружено практически — агент пытался использовать
   credentials приложения из application.yml
+- Сетевой доступ ограничен на уровне сети (internal + egress-proxy),
+  а не только на уровне отдельного инструмента: инструмент-уровневый
+  allowlist тривиально обходится через bash/curl, которые у агента
+  уже есть по умолчанию — реальная граница должна быть enforced ниже,
+  там, где её нельзя обойти выбором другого инструмента
+- Открытый режим сети — через отдельный override-файл, а не через
+  переменную в .env: защищённый режим остаётся гарантированным
+  дефолтом, а не зависит от того, не забыли ли выставить флаг
+- allowlist — один общий файл (allowlist-base.txt), без разделения
+  на базовый/проектный: харнес переиспользуется между схожими
+  Java/Spring-проектами, домены пересекаются, разделение добавляло
+  бы лишний файл без заметной пользы
+- Логи squid — в named volume, не bind-mount: bind-mount с хоста
+  ломается из-за несовпадения владельца директории между хостом и
+  пользователем proxy внутри контейнера squid
