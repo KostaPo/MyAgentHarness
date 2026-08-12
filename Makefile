@@ -1,8 +1,8 @@
-.PHONY: up down run run-open logs ps clean denied
+.PHONY: up down run run-open logs ps clean denied net-check
 
-# Поднять инфраструктуру (модель, БД-мост, прокси) без самого агента
+# Поднять инфраструктуру (модель, БД-мост, прокси, поиск) без самого агента
 up:
-	docker compose up -d llama-cpp mcp-db egress-proxy
+	docker compose up -d llama-cpp mcp-db egress-proxy searxng
 
 # Остановить всё
 down:
@@ -24,12 +24,40 @@ run-open: up
 ps:
 	docker compose ps
 
-# Логи инфраструктурных сервисов
+# Логи инфраструктурных сервисов (включая поиск)
 logs:
-	docker compose logs -f llama-cpp mcp-db egress-proxy
+	docker compose logs -f llama-cpp mcp-db egress-proxy searxng
+
+# Только squid — удобно держать открытым в отдельном терминале во время сессии
+proxy-log:
+	docker compose logs -f egress-proxy
 
 # Список доменов, заблокированных squid (для расширения allowlist)
 denied:
 	docker compose exec egress-proxy \
-		grep TCP_DENIED /var/log/squid/access.log 2>/dev/null | \
-		awk '{print $$7}' | sed -E 's/:[0-9]+$$/''/' | sort -u
+	   grep TCP_DENIED /var/log/squid/access.log 2>/dev/null | \
+	   awk '{print $$7}' | sed -E 's/:[0-9]+$$/''/' | sort -u
+
+# Список доменов, реально пропущенных squid (подтверждение, что MCP-вызовы идут через прокси)
+allowed:
+	docker compose exec egress-proxy \
+	   grep TCP_TUNNEL /var/log/squid/access.log 2>/dev/null | \
+	   awk '{print $$7}' | sed -E 's/:[0-9]+$$/''/' | sort -u
+
+# Проверить, в каких сетях сейчас находится pi-agent (диагностика режима)
+net-check:
+	docker inspect pi-agent --format '{{range $$k,$$v := .NetworkSettings.Networks}}{{$$k}} {{end}}' 2>/dev/null || \
+	   echo "pi-agent сейчас не запущен (это разовый контейнер, живёт только во время сессии)"
+
+# Полная пересборка: снести volumes + образы + пересобрать заново
+rebuild:
+	docker compose down -v
+	docker compose build --no-cache
+	docker compose up -d llama-cpp mcp-db egress-proxy searxng
+
+# То же самое + свежие версии готовых образов (dbhub, searxng, squid, llama.cpp)
+rebuild-all:
+	docker compose down -v
+	docker compose pull
+	docker compose build --no-cache
+	docker compose up -d llama-cpp mcp-db egress-proxy searxng

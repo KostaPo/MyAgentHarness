@@ -9,7 +9,6 @@ services:
       - ~/.lmstudio/models:/models
     networks:
       - harness-net
-      - egress-net
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all

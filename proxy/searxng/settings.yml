@@ -1,0 +1,30 @@
+use_default_settings:
+  engines:
+    keep_only:
+      - google
+      - duckduckgo
+      - bing
+      - wikipedia
+      - github
+
+search:
+  formats:
+    - json
+  delay: 2.0
+
+outgoing:
+  proxies:
+    all://:
+      - http://egress-proxy:3128
+
+engines:
+  - name: google
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: github
+    disabled: false

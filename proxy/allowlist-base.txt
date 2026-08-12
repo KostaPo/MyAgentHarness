@@ -1,58 +1,183 @@
 # --- LLM провайдер ---
+
 .openrouter.ai
 
-# --- Языки и рантаймы ---
-.docs.oracle.com
-.dev.java
-.kotlinlang.org
-.docs.python.org
-.doc.rust-lang.org
-.pkg.go.dev
-.nodejs.org
+# Java/JVM
 
-# --- Java/Spring экосистема ---
-.spring.io
-.docs.spring.io
+.openjdk.org
+.adoptium.net
+.graalvm.org
+.gradle.org
+.jakarta.ee
+.eclipse.org
 .hibernate.org
-.kafka.apache.org
-.junit.org
-.mockito.org
-.projectlombok.org
+.spring.io
 .quarkus.io
 .micronaut.io
-.baeldung.com
+.kotlinlang.org
+.scala-lang.org
+.sbt.org
 
-# --- Данные / очереди / инфра ---
-.rabbitmq.com
+# Go
+
+.go.dev
+.golang.org
+.goproxy.io
+.golangci-lint.run
+.goreportcard.com
+.go-chi.io
+.gin-gonic.com
+.echo.labstack.com
+.fiber.gofiber.io
+
+# DB
+
+.postgresql.org
+.mysql.com
+.mongodb.com
+.sqlite.org
+.clickhouse.com
 .redis.io
 .elastic.co
-.testcontainers.org
+.opensearch.org
+.cockroachlabs.com
+.neo4j.com
+.mariadb.org
+.couchbase.com
 
-# --- Инфраструктура / DevOps ---
+# Message Brokers / Streaming
+
+.kafka.apache.org
+.confluent.io
+.rabbitmq.com
+.activemq.apache.org
+.pulsar.apache.org
+.nats.io
+.redpanda.com
+
+# Cache / Distributed Cache
+
+.hazelcast.com
+.memcached.org
+.infinispan.org
+.ehcache.org
+
+# Frontend
+
+.typescriptlang.org
+.react.dev
+.nextjs.org
+.vuejs.org
+.angular.dev
+.vite.dev
+.svelte.dev
+.solidjs.com
+.webpack.js.org
+.eslint.org
+.prettier.io
+.tailwindcss.com
+
+# Git / CI / CD
+
+.github.com
+.gitlab.com
+.jenkins.io
+.circleci.com
+.travis-ci.com
+.buildkite.com
+.helm.sh
+.terraform.io
+.opentofu.org
+.ansible.com
+.pulumi.com
+
+# Containers
+
+.docker.com
+.containerd.io
+.podman.io
+.buildah.io
+.opencontainers.org
+
+# Kubernetes
+
 .kubernetes.io
-.docs.docker.com
-.developer.hashicorp.com
+.k8s.io
+.cncf.io
 
-# --- Пакетные реестры ---
-.readthedocs.io
+# OpenShift
+
+.redhat.com
+.openshift.com
+
+# Cloud / Infrastructure
+
+.aws.amazon.com
+.azure.microsoft.com
+.learn.microsoft.com
+.digitalocean.com
+.cloudflare.com
+.hetzner.com
+
+# HashiCorp / IaC
+
+.developer.hashicorp.com
+.consul.io
+.nomadproject.io
+.vaultproject.io
+.packer.io
+.boundaryproject.io
+
+# AI / LLM / Agents
+
+.openai.com
+.anthropic.com
+.ai.google.dev
+.huggingface.co
+.modelcontextprotocol.org
+.langchain.com
+.llamaindex.ai
+.cohere.com
+
+# API / Web Standards
+
+.rfc-editor.org
+.ietf.org
+.w3.org
+.whatwg.org
+.openapi.org
+.json-schema.org
+
+# Package Registries
+
+.maven.apache.org
+.mvnrepository.com
 .javadoc.io
 .pypi.org
 .npmjs.com
+.registry.npmjs.org
 .crates.io
-.maven.apache.org
-.mvnrepository.com
+.readthedocs.io
 
-# --- Общее ---
-.developer.mozilla.org
+# GitHub / Source Code
+
+.githubusercontent.com
+
+# Developer Community
+
+.stackoverflow.com
+.stackexchange.com
+.serverfault.com
+.superuser.com
+.askubuntu.com
+
+# Documentation / Knowledge
+
+.wikipedia.org
 .github.io
-raw.githubusercontent.com
-stackoverflow.com
 
-# --- Пакетные реестры (добавлено) ---
-registry.npmjs.org
+# --- Search backend upstream ---
 
-# --- Git / VCS API ---
-api.github.com
-
-# --- pi agent runtime ---
-pi.dev
+.google.com
+.duckduckgo.com
+.bing.com

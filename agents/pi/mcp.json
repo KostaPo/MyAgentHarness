@@ -2,6 +2,21 @@
   "mcpServers": {
     "postgres": {
       "url": "http://mcp-db:8080/mcp"
+    },
+    "search": {
+      "command": "mcp-searxng",
+      "args": [],
+      "env": {
+        "SEARXNG_URL": "http://searxng:8080",
+        "HOME": "/tmp"
+      }
+    },
+    "fetch": {
+      "command": "fetch-mcp",
+      "args": [],
+      "env": {
+        "HOME": "/tmp"
+      }
     }
   }
 }
